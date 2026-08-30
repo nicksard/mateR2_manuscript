@@ -1,168 +1,109 @@
+#!/usr/bin/env Rscript
+
 # ==============================================================================
-# Script 03: MCMC Convergence & Fidelity Diagnostics (Local Loop)
+# Script 03: Convergence and Fidelity Summary
 # Project: mateR2 Manuscript
-# Goal: Load 4 chains per scenario from data/outputs/chains/, discard burn-in,
-#       and calculate per-parameter convergence (R-hat, ESS) and fidelity error.
+#
+# Goal: Aggregate the per-job outputs of script 02 into the two summary tables
+#       the manuscript and script 04 consume.
+#
+# Outputs:
+#   data/outputs/mcmc_convergence_by_seed.csv  -- one row per scenario x seed set
+#   data/outputs/mcmc_convergence_summary.csv  -- one row per scenario, WORST CASE
+#                                                 across seed sets. Original
+#                                                 18-column schema, so script 04
+#                                                 runs unchanged.
+#
+# CHANGED from the original:
+#   * R-hat and ESS are no longer computed here. mateR2::run_mcmc_chains()
+#     computes them, so the diagnostic definition now lives in one place, in a
+#     tested package function, rather than being duplicated in a script.
+#   * The original loaded 1e6-row histories from disk and used them UN-thinned,
+#     while Section 3.1 describes a trace recorded every 10th iteration. The
+#     traces are now thinned once, in the package, at `trace_thin`.
+#
+# WORST CASE is a per-metric envelope: max error, max R-hat, min ESS taken
+# independently across seed sets. It is deliberately conservative and is NOT a
+# single realisable run -- R-hat and ESS in one cell may come from different
+# seed sets. Say so in the figure caption.
 # ==============================================================================
 
-library(readr)
 library(dplyr)
-library(coda)
+library(readr)
 
-# 1. Setup Directories & Load Grid
-# ------------------------------------------------------------------------------
-chains_dir  <- "data/outputs/chains"
-summary_dir <- "data/outputs"
-if (!dir.exists(summary_dir)) dir.create(summary_dir, recursive = TRUE)
-
-grid_file <- "input/mcmc_scenarios_grid.csv"
-if (!file.exists(grid_file)) {
-  stop(sprintf("Error: Grid file '%s' not found.", grid_file))
+in_dir <- "data/outputs/chains"
+files  <- list.files(in_dir, pattern = "^scenario_\\d+_seed_\\d+\\.rds$",
+                     full.names = TRUE)
+if (!length(files)) {
+  stop("No job outputs in ", in_dir, ". Run scripts/02_run_mcmc_chains.R first.")
 }
+cat(sprintf("Found %d job files.\n", length(files)))
 
-jobs <- read_csv(grid_file, show_col_types = FALSE)
-
-# Group jobs by scenario to pair the 4 independent chains per scenario
-scenarios <- jobs %>%
-  group_by(scenario_id, target_Np, target_SR, target_MM, decay_constant, burn_in, n_iter) %>%
-  summarize(
-    job_ids = list(job_id),
-    chains  = list(chain),
-    .groups = "drop"
-  )
-
-num_scenarios <- nrow(scenarios)
-cat(sprintf("\n[Diagnostics] Starting sequential analysis across %d scenarios...\n\n", num_scenarios))
-
-# 2. Sequential Processing Loop
-# ------------------------------------------------------------------------------
-results_list <- vector("list", num_scenarios)
-i <- 1
-for (i in seq_len(num_scenarios)) {
-  scen <- scenarios[i, ]
-  j_ids <- unlist(scen$job_ids)
-  c_ids <- unlist(scen$chains)
-  
-  trace_Np <- list()
-  trace_SR <- list()
-  trace_MM <- list()
-  
-  obs_Np_vec <- c()
-  obs_SR_vec <- c()
-  obs_MM_vec <- c()
-  
-  valid_chains_loaded <- 0
-  c_idx <- 1
-  # Loop through all 4 chains for this scenario
-  for (c_idx in seq_along(c_ids)) {
-    # Match output filename format from Script 02
-    file_path <- sprintf("%s/job%04d_scen%02d_chain%d.rds", 
-                         chains_dir, j_ids[c_idx], scen$scenario_id, c_ids[c_idx])
-
-    if (!file.exists(file_path)) next
-    
-    res <- readRDS(file_path)
-
-    chain_history <- res$mcmc_output$history
-
-    if (is.null(chain_history) || nrow(chain_history) == 0) next
-    
-    valid_chains_loaded <- valid_chains_loaded + 1
-
-    
-    # Slicing burn-in: account for C++ internal thin step (default 10)
-    thin_step_used <- ifelse(!is.null(res$mcmc_output$thin_step), res$mcmc_output$thin_step, 10)
-    burn_in_rows   <- floor(scen$burn_in)
-    
-    if (burn_in_rows < nrow(chain_history)) {
-      post_burn <- chain_history[(burn_in_rows + 1):nrow(chain_history), ]
-    } else {
-      post_burn <- chain_history
-    }
-    
-    # Store un-thinned trace vectors into coda mcmc objects
-    trace_Np[[valid_chains_loaded]] <- mcmc(post_burn$Np, start = min(post_burn$iteration), thin = 1)
-    trace_SR[[valid_chains_loaded]] <- mcmc(post_burn$sr, start = min(post_burn$iteration), thin = 1)
-    trace_MM[[valid_chains_loaded]] <- mcmc(post_burn$mean_mates, start = min(post_burn$iteration), thin = 1)
-    
-    # Capture MAP or mean realized values across post-burn-in sample
-    obs_Np_vec <- c(obs_Np_vec, mean(post_burn$Np, na.rm = TRUE))
-    obs_SR_vec <- c(obs_SR_vec, mean(post_burn$sr, na.rm = TRUE))
-    obs_MM_vec <- c(obs_MM_vec, mean(post_burn$mean_mates, na.rm = TRUE))
-  }
-  
-  # Skip scenario if no valid chain files were loaded
-  if (valid_chains_loaded == 0) {
-    cat(sprintf("  -> Scenario %d: No completed chain files found. Skipping.\n", scen$scenario_id))
-    next
-  }
-  
-  # Convert lists to coda mcmc.list objects
-  mcmc_list_Np <- mcmc.list(trace_Np)
-  mcmc_list_SR <- mcmc.list(trace_SR)
-  mcmc_list_MM <- mcmc.list(trace_MM)
-  
-  # Compute Gelman-Rubin R-hat safely
-  rhat_Np <- NA; rhat_SR <- NA; rhat_MM <- NA
-  if (valid_chains_loaded > 1) {
-    rhat_Np <- tryCatch(gelman.diag(mcmc_list_Np, autoburnin = FALSE, multivariate = FALSE)$psrf[1, 1], error = function(e) NA_real_)
-    rhat_SR <- tryCatch(gelman.diag(mcmc_list_SR, autoburnin = FALSE, multivariate = FALSE)$psrf[1, 1], error = function(e) NA_real_)
-    rhat_MM <- tryCatch(gelman.diag(mcmc_list_MM, autoburnin = FALSE, multivariate = FALSE)$psrf[1, 1], error = function(e) NA_real_)
-  }
-  
-  # Compute Effective Sample Size (ESS) safely across all chains
-  ess_Np <- tryCatch(sum(effectiveSize(mcmc_list_Np)), error = function(e) NA_real_)
-  ess_SR <- tryCatch(sum(effectiveSize(mcmc_list_SR)), error = function(e) NA_real_)
-  ess_MM <- tryCatch(sum(effectiveSize(mcmc_list_MM)), error = function(e) NA_real_)
-  
-  # Calculate mean realized targets across chains
-  obs_Np <- mean(obs_Np_vec, na.rm = TRUE)
-  obs_SR <- mean(obs_SR_vec, na.rm = TRUE)
-  obs_MM <- mean(obs_MM_vec, na.rm = TRUE)
-  
-  # Construct diagnostic summary row
-  results_list[[i]] <- data.frame(
-    scenario_id  = scen$scenario_id,
-    profile_name = "Equal_Scaled",
-    target_Np    = scen$target_Np,
-    target_SR    = scen$target_SR,
-    target_MM    = scen$target_MM,
-    
-    # Realized MAP / Mean Demographic Values
-    obs_Np       = obs_Np,
-    obs_SR       = obs_SR,
-    obs_MM       = obs_MM,
-    
-    # Percentage Fidelity Errors
-    error_Np_pct = abs(obs_Np - scen$target_Np) / scen$target_Np * 100,
-    error_SR_pct = abs(obs_SR - scen$target_SR) / scen$target_SR * 100,
-    error_MM_pct = abs(obs_MM - scen$target_MM) / scen$target_MM * 100,
-    
-    # Explicit Convergence Diagnostics
-    chains_used  = valid_chains_loaded,
-    rhat_Np      = rhat_Np,  ess_Np = ess_Np,
-    rhat_SR      = rhat_SR,  ess_SR = ess_SR,
-    rhat_MM      = rhat_MM,  ess_MM = ess_MM,
-    
+# --- Long table: one row per scenario x seed set ------------------------------
+per_seed <- bind_rows(lapply(files, function(f) {
+  x <- readRDS(f)
+  d <- x$diagnostics
+  g <- function(p, col) d[[col]][d$parameter == p]
+  data.frame(
+    scenario_id  = x$job$scenario_id,
+    seed_set     = x$job$seed_set,
+    profile_name = x$job$profile_name,
+    target_Np    = x$job$target_Np,
+    target_SR    = x$job$target_SR,
+    target_MM    = x$job$target_MM,
+    obs_Np = g("Np","observed"), obs_SR = g("sr","observed"),
+    obs_MM = g("mean_mates","observed"),
+    error_Np_pct = g("Np","error_pct"), error_SR_pct = g("sr","error_pct"),
+    error_MM_pct = g("mean_mates","error_pct"),
+    chains_used  = g("Np","n_chains"),
+    rhat_Np = g("Np","rhat"), ess_Np = g("Np","ess"),
+    rhat_SR = g("sr","rhat"), ess_SR = g("sr","ess"),
+    rhat_MM = g("mean_mates","rhat"), ess_MM = g("mean_mates","ess"),
+    run_time_sec = x$run_time_sec,
     stringsAsFactors = FALSE
   )
-  
-  cat(sprintf("Processed Scenario %02d/%02d (Chains: %d) | Rhat_MM: %.2f | ESS_MM: %.0f\n", 
-              i, num_scenarios, valid_chains_loaded, rhat_MM, ess_MM))
-}
+})) %>% arrange(scenario_id, seed_set)
 
-# 3. Consolidate and Save Final Summary
-# ------------------------------------------------------------------------------
-final_diagnostics <- bind_rows(results_list)
+write_csv(per_seed, "data/outputs/mcmc_convergence_by_seed.csv")
 
-if (nrow(final_diagnostics) > 0) {
-  output_csv <- file.path(summary_dir, "mcmc_convergence_summary.csv")
-  write_csv(final_diagnostics, output_csv)
-  
-  cat("\n====================================================\n")
-  cat(sprintf("Diagnostics Complete! Summary saved to: %s\n", output_csv))
-  cat("====================================================\n")
-  print(head(final_diagnostics, 10))
-} else {
-  cat("\n[Error] No scenario outputs were processed. Please check chain RDS paths.\n")
+# --- Envelope: one row per scenario, worst case across seed sets ---------------
+# obs_* is taken from the seed set that produced the worst error for that
+# parameter, so each observed value stays paired with its own error.
+worst_obs <- function(obs, err) obs[which.max(err)]
+
+envelope <- per_seed %>%
+  group_by(scenario_id, profile_name, target_Np, target_SR, target_MM) %>%
+  summarise(
+    obs_Np       = worst_obs(obs_Np, error_Np_pct),
+    obs_SR       = worst_obs(obs_SR, error_SR_pct),
+    obs_MM       = worst_obs(obs_MM, error_MM_pct),
+    error_Np_pct = max(error_Np_pct),
+    error_SR_pct = max(error_SR_pct),
+    error_MM_pct = max(error_MM_pct),
+    chains_used  = sum(chains_used),          # total chains behind the cell
+    rhat_Np = max(rhat_Np), ess_Np = min(ess_Np),
+    rhat_SR = max(rhat_SR), ess_SR = min(ess_SR),
+    rhat_MM = max(rhat_MM), ess_MM = min(ess_MM),
+    n_seed_sets  = n(),
+    .groups = "drop"
+  ) %>%
+  arrange(scenario_id)
+
+# Original 18-column schema, in the original order, so script 04 is untouched.
+schema <- c("scenario_id","profile_name","target_Np","target_SR","target_MM",
+            "obs_Np","obs_SR","obs_MM","error_Np_pct","error_SR_pct",
+            "error_MM_pct","chains_used","rhat_Np","ess_Np","rhat_SR","ess_SR",
+            "rhat_MM","ess_MM")
+write_csv(envelope[, schema], "data/outputs/mcmc_convergence_summary.csv")
+
+# --- Report -------------------------------------------------------------------
+cat(sprintf("\n[Complete] %d scenarios x %d seed sets.\n",
+            nrow(envelope), max(envelope$n_seed_sets)))
+for (p in c("Np","SR","MM")) {
+  e <- envelope[[paste0("error_", p, "_pct")]]
+  r <- envelope[[paste0("rhat_", p)]]
+  s <- envelope[[paste0("ess_",  p)]]
+  cat(sprintf("  %-3s  median err %6.3f%%  max %7.3f%%  |  rhat>1.05: %2d/%d  |  ESS<400: %2d/%d  min ESS %8.0f\n",
+              p, median(e), max(e), sum(r > 1.05), nrow(envelope),
+              sum(s < 400), nrow(envelope), min(s)))
 }

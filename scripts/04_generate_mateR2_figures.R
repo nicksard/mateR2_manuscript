@@ -26,7 +26,17 @@ if (!file.exists(summary_csv)) {
 # ------------------------------------------------------------------------------
 is_void <- function(sr, mm) { mm < ((sr + 1) / 2) }
 
+# The summary CSV contains only the biologically viable scenarios -- script 01
+# filters the rest out, so the 15 combinations violating MM >= (SR+1)/2 are not
+# rows at all. Without completing the grid here, `filter(is_structurally_void)`
+# matches nothing, the grey "excluded" tiles are never drawn, and those cells
+# render as blank background instead of as explicitly excluded.
 final_agg <- read_csv(summary_csv, show_col_types = FALSE) %>%
+  tidyr::complete(
+    target_Np = c(100, 200, 400, 800, 1600),
+    target_SR = c(1, 2, 4),
+    target_MM = c(1, 2, 4)
+  ) %>%
   rowwise() %>%
   mutate(is_structurally_void = is_void(target_SR, target_MM)) %>%
   ungroup() %>%
@@ -101,7 +111,7 @@ gen_ess_plot <- function(data_subset, var_cat, var_label, title, show_y = TRUE, 
               fill = "gray95", color = "black", linewidth = 0.5) +
     # Dynamic text color: White on dark 'Low' cells, Black on all other light cells
     geom_text(aes(label = {{var_label}}, 
-                  color = ifelse({{var_cat}} == "Low", "white", "black")), 
+                  color = ifelse(!is.na({{var_cat}}) & {{var_cat}} == "Low", "white", "black")), 
               size = 2.5, fontface = "bold") +
     scale_color_identity() +
     scale_fill_manual(
@@ -134,7 +144,7 @@ gen_rhat_plot <- function(data_subset, var_cat, var_label, title, show_y = TRUE,
               fill = "gray95", color = "black", linewidth = 0.5) +
     # Dynamic text color: White on dark 'Poor' cells, Black on other cells
     geom_text(aes(label = {{var_label}}, 
-                  color = ifelse({{var_cat}} == "Poor", "white", "black")), 
+                  color = ifelse(!is.na({{var_cat}}) & {{var_cat}} == "Poor", "white", "black")), 
               size = 2.5, fontface = "bold") +
     scale_color_identity() +
     scale_fill_manual(

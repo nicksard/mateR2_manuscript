@@ -1,5 +1,5 @@
 # ==============================================================================
-# Script 04: Bipartite Network Topology & Micro/Macro Validation
+# Script 05: Bipartite Network Topology & Micro/Macro Validation
 # Evaluates Connected Components (Macro) and Co-Mating Pair Density (Micro)
 # Across Geometric Parent Pool Scales (Np = 100, 200, 400, 800, 1600)
 # ==============================================================================
@@ -9,56 +9,36 @@ library(dplyr)
 library(tidyr)
 library(readr)
 library(ggplot2)
-library(igraph)
 library(RColorBrewer)
 library(patchwork)
 
 set.seed(42)
-setwd("G:/My Drive/Research/2026/Manuscripts/Mater2 paper/mateR2_manuscript")
+# Run from the repository root (open the .Rproj, or `Rscript scripts/05_...R`).
+# No setwd(): a hard-coded absolute path makes the script unrunnable for anyone
+# who is not the author.
 
 # ------------------------------------------------------------------------------
 # 1. Helper Function: Calculate Co-Mating Pair Density & Connected Components
 # ------------------------------------------------------------------------------
 calc_network_topology_stats <- function(mat_binary) {
-  
-  # Macro-topology: Connected Components
-  g <- graph_from_biadjacency_matrix(mat_binary)
-  num_components <- count_components(g)
-  
-  # Micro-topology: One-Mode Projections (AA^T and A^TA)
-  proj_females <- mat_binary %*% t(mat_binary)
-  diag(proj_females) <- 0
-  
-  proj_males <- t(mat_binary) %*% mat_binary
-  diag(proj_males) <- 0
-  
-  # Co-mating pair density: proportion of possible same-sex pairs sharing >= 1 mate
-  n_females <- nrow(mat_binary)
-  n_males   <- ncol(mat_binary)
-  
-  possible_female_pairs <- ifelse(n_females > 1, n_females * (n_females - 1) / 2, 1)
-  possible_male_pairs   <- ifelse(n_males > 1, n_males * (n_males - 1) / 2, 1)
-  
-  active_female_pairs <- sum(proj_females > 0) / 2
-  active_male_pairs   <- sum(proj_males > 0) / 2
-  
-  mean_comating_density <- mean(c(
-    active_female_pairs / possible_female_pairs,
-    active_male_pairs / possible_male_pairs
-  ), na.rm = TRUE)
-  
-  return(tibble(
-    Connected_Components  = num_components,
-    CoMating_Pair_Density = mean_comating_density
-  ))
+  # Delegates to mateR2. The previous in-script implementation named the row
+  # projection "females" and the column projection "males"; mateR2 matrices are
+  # rows = males, columns = females. Because the reported statistic is the mean
+  # of the two and numerator/denominator were transposed consistently, the
+  # published Figure 4B was unaffected -- but the package functions keep the
+  # labels straight and also return per-sex densities.
+  tibble::tibble(
+    Connected_Components  = mateR2::count_network_components(mat_binary),
+    CoMating_Pair_Density = mateR2::comating_pair_density(mat_binary)$mean_density
+  )
 }
 
-# ------------------------------------------------------------------------------
 # 2. Configuration & Parameter Grid Linking
 # ------------------------------------------------------------------------------
 mixing_grid      <- rev(c(1, 0.75, 0.50, 0.25, 0.10, 0.05, 0.02, 0.01, 0))
-n_curveball_reps <- 5       # Replicates per matrix state
-n_posterior_draws  <- 5       # Number of random posterior MCMC draws to sample
+n_swap_reps        <- 5     # Rewiring replicates per matrix state
+# Posterior draws are now produced by script 02, pooled across chains, and
+# Section 3.2 reports 10 per scenario. Read them rather than re-deriving.
 data_dir          <- "data/outputs/chains"
 
 # Read job/scenario metadata
@@ -70,8 +50,15 @@ target_jobs <- job_grid %>%
 
 cat(sprintf("Selected %d jobs matching Anchor Scenario (SR=2.0, MM=2.0) across Np scales.\n", nrow(target_jobs)))
 
-# Locate saved RDS files for target jobs
-rds_files <- list.files(data_dir, pattern = "\\.rds$", full.names = TRUE)
+# Locate saved job files. Script 02 writes one file per scenario x seed set,
+# named scenario_<id>_seed_<set>.rds.
+rds_files <- list.files(data_dir, pattern = "^scenario_\\d+_seed_\\d+\\.rds$",
+                        full.names = TRUE)
+if (!length(rds_files)) {
+  stop("No chain outputs in ", data_dir, ". Run scripts/02_run_mcmc_chains.R first.")
+}
+# One row per scenario: the topology sweep does not vary by seed set.
+target_jobs <- target_jobs[!duplicated(target_jobs$scenario_id), ]
 
 results_list <- list()
 list_idx     <- 1
@@ -87,17 +74,17 @@ for (i in 1:nrow(target_jobs)) {
   
   curr_job <- target_jobs[i, ]
   
-  # Find matching RDS file (e.g. job0005_scen02_chain1.rds)
-  pattern_str <- sprintf("job%04d_", curr_job$job_id)
-  f_path      <- rds_files[grep(pattern_str, rds_files)]
+  pattern_str <- sprintf("^scenario_%02d_seed_", curr_job$scenario_id)
+  f_path      <- rds_files[grep(pattern_str, basename(rds_files))]
   
   if (length(f_path) == 0) {
-    warning(sprintf("Could not find RDS file for job_id %d. Skipping.", curr_job$job_id))
+    warning(sprintf("No output for scenario_id %d. Skipping.", curr_job$scenario_id))
     next
   }
   
-  f_path <- f_path[1] # Take first chain match
-  cat(sprintf("Processing Job %d (Np = %d) -> %s\n", curr_job$job_id, curr_job$target_Np, basename(f_path)))
+  f_path <- f_path[1]   # seed sets are equivalent here; take the first
+  cat(sprintf("Processing scenario %d (Np = %d) -> %s\n",
+              curr_job$scenario_id, curr_job$target_Np, basename(f_path)))
   
   mcmc_data <- readRDS(f_path)
   
@@ -109,26 +96,26 @@ for (i in 1:nrow(target_jobs)) {
   
   mat_map <- mp_table_to_matrix(mp_table = map_df)
   
-  # Extract thinned samples from posterior ensemble
-  samples_pool <- mcmc_data$ensemble_c_k %||% mcmc_data$mcmc_output$samples
+  # Posterior draws come straight from script 02: 10 states pooled across the
+  # four chains. The old code took 5 draws from ONE chain's sample list, giving
+  # 20 per scenario where Section 3.2 reports 10.
+  samples_pool <- mcmc_data$posterior_draws
   
   ensemble_matrices <- list()
-  if (!is.null(samples_pool) && length(samples_pool) > 0) {
-    draw_indices <- round(seq(1, length(samples_pool), length.out = min(n_posterior_draws, length(samples_pool))))
-    for (d_i in seq_along(draw_indices)) {
-      counts_vec <- samples_pool[[draw_indices[d_i]]]
-      draw_df    <- map_df
-      draw_df$MAP_Count <- counts_vec
-      ensemble_matrices[[d_i]] <- tryCatch(mp_table_to_matrix(mp_table = draw_df), error = function(e) NULL)
+  if (length(samples_pool)) {
+    for (d_i in seq_along(samples_pool)) {
+      draw_df <- map_df
+      draw_df$MAP_Count <- samples_pool[[d_i]]
+      ensemble_matrices[[d_i]] <- tryCatch(mp_table_to_matrix(mp_table = draw_df),
+                                           error = function(e) NULL)
     }
     ensemble_matrices <- Filter(Negate(is.null), ensemble_matrices)
-  } else {
-    ensemble_matrices <- list(mat_map)
   }
+  if (!length(ensemble_matrices)) ensemble_matrices <- list(mat_map)
   
   # --- A. MAP Sweep ---
   for (I_val in mixing_grid) {
-    for (rep in 1:n_curveball_reps) {
+    for (rep in 1:n_swap_reps) {
       mat_shuffled <- randomize_mating_structure(
         binary_IIM = mat_map,
         I          = I_val
@@ -224,7 +211,7 @@ p_density <- ggplot(summary_topology_df, aes(x = Intensity, y = Mean_Density, co
   scale_x_continuous(breaks = seq(0, 1, by = 0.1)) +
   labs(
     title = "B) Co-Mating Pair Density (Micro-Topology)",
-    x     = "Curveball Mixing Intensity (I)",
+    x     = "Mixing Intensity (I)",
     y     = "Mean One-Mode Projection Density",
     color = expression("Parent Pool (" * N[P] * ")")
   ) +
