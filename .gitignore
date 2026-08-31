@@ -4,3 +4,7 @@
 .httr-oauth
 .DS_Store
 .quarto
+data/outputs/chains/
+figures/
+Rplots.pdf
+Rplots.pdf
