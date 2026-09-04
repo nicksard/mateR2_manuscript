@@ -37,7 +37,9 @@ steps <- list(
   list(id = "07", file = "07_figure_1_Bipartite_Network_visuals.R",
        what = "Figure 1 (conceptual bipartite network)"),
   list(id = "08", file = "08_figure_2_worked_Example.R",
-       what = "Figure 2 (worked example)")
+       what = "Figure 2 (worked example)"),
+  list(id = "09", file = "09_sibling_asymmetry_mechanism.R",
+       what = "Sibling asymmetry mechanism (Sections 5.2 / 5.3)")
 )
 
 args <- commandArgs(trailingOnly = TRUE)

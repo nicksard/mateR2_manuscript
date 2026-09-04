@@ -94,7 +94,7 @@ print(fig_1_schematic)
 
 # Export the figure to the project's 'figures' directory
 ggsave(
-  filename = "figures/Figure_1_Bipartite_Networks.png",
+  filename = "figures/Figure_01_Bipartite_Networks.png",
   plot = fig_1_schematic,
   width = 10,
   height = 8,

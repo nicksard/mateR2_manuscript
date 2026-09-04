@@ -17,6 +17,7 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(patchwork)
+library(ggtext)   # real subscripts in the proofs block; pure R, no system deps
 
 if (!dir.exists("figures")) dir.create("figures", recursive = TRUE)
 
@@ -29,7 +30,11 @@ zero_grey  <- "grey80"
 base_tbl <- theme_void(base_size = 9) +
   theme(plot.title    = element_text(face = "bold", size = 11, hjust = 0),
         plot.subtitle = element_text(size = 8.5, colour = "grey30", hjust = 0),
-        plot.caption  = element_text(size = 8, colour = ink, hjust = 0, lineheight = 1.35),
+        # element_markdown() renders the proofs with real subscripts; plain
+        # element_text() prints "N_M" and "c_b" literally, which misstates
+        # notation Section 2.1 defines carefully.
+        plot.caption  = ggtext::element_markdown(size = 8, colour = ink,
+                                                 hjust = 0, lineheight = 1.5),
         plot.margin   = margin(6, 10, 6, 10))
 
 # ==============================================================================
@@ -124,13 +129,19 @@ p_b <- ggplot() +
   labs(title = "b) Expanded Bipartite Mating Matrix",
        subtitle = "Mapping individual node degrees to population demographic targets",
        caption = sprintf(paste0(
-         "Legend: row marginals = male mating success; column marginals = female mating success\n\n",
-         "Demographic proofs derived from network marginals:\n",
-         "\u2022 Total parents (N_P):  N_M + N_F = \u03a3 c_b m_b + \u03a3 c_b f_b = %d + %d = %d\n",
-         "\u2022 Sex ratio (SR):  N_M / N_F = %d / %d = %.2f\n",
-         "\u2022 Total mating edges (E):  \u03a3 row marginals = \u03a3 column marginals = \u03a3 c_b (m_b \u00b7 f_b) = %d\n",
-         "\u2022 Mean mates (MM):  \u00bd (E/N_M + E/N_F) = (E \u00b7 N_P) / (2 \u00b7 N_M \u00b7 N_F) = ",
-         "(%d \u00b7 %d) / (2 \u00b7 %d \u00b7 %d) = %.2f"),
+         "Legend: row marginals = male mating success (*d*<sub>*i*</sub><sup>*m*</sup>); ",
+         "column marginals = female mating success (*d*<sub>*j*</sub><sup>*f*</sup>)<br><br>",
+         "**Demographic proofs derived from network marginals:**<br>",
+         "&bull; Total parents: *N*<sub>P</sub> = *N*<sub>M</sub> + *N*<sub>F</sub> = ",
+         "&Sigma; *c*<sub>*b*</sub>*m*<sub>*b*</sub> + &Sigma; *c*<sub>*b*</sub>*f*<sub>*b*</sub> ",
+         "= %d + %d = **%d**<br>",
+         "&bull; Sex ratio: *SR* = *N*<sub>M</sub> / *N*<sub>F</sub> = %d / %d = **%.2f**<br>",
+         "&bull; Total mating edges: *E* = &Sigma; *d*<sub>*i*</sub><sup>*m*</sup> = ",
+         "&Sigma; *d*<sub>*j*</sub><sup>*f*</sup> = ",
+         "&Sigma; *c*<sub>*b*</sub>(*m*<sub>*b*</sub> &middot; *f*<sub>*b*</sub>) = **%d**<br>",
+         "&bull; Mean mates: *MM* = &frac12;(*E*/*N*<sub>M</sub> + *E*/*N*<sub>F</sub>) = ",
+         "(*E* &middot; *N*<sub>P</sub>) / (2 &middot; *N*<sub>M</sub> &middot; *N*<sub>F</sub>) = ",
+         "(%d &middot; %d) / (2 &middot; %d &middot; %d) = **%.2f**"),
          Nm, Nf, Np, Nm, Nf, SR, E, E, Np, Nm, Nf, MM)) +
   base_tbl
 
