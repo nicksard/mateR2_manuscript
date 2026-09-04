@@ -17,7 +17,7 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(patchwork)
-library(ggtext)   # real subscripts in the proofs block; pure R, no system deps
+library(ggtext)
 
 if (!dir.exists("figures")) dir.create("figures", recursive = TRUE)
 

@@ -29,6 +29,7 @@ library(dplyr)
 library(readr)
 library(ggplot2)
 library(patchwork)
+library(ggtext)    # subscripts in panel titles
 library(parallel)
 
 if (!dir.exists("data/outputs")) dir.create("data/outputs", recursive = TRUE)
@@ -109,14 +110,16 @@ s$bad <- (is.infinite(s$rhat_max) | s$rhat_max > 1.05) | (s$n_frozen_chains > 0)
 LIM <- range(log10(s$err))
 ink <- "grey15"
 
+# The figure carries only the panels. Everything explanatory -- what the cells
+# are, what the outline and the red x mean, how the sweep was run -- belongs in
+# the manuscript caption, not baked into the image.
 base <- theme_bw(base_size = 8) +
   theme(panel.grid = element_blank(),
-        plot.title = element_text(size = 8.5, face = "bold"),
-        plot.subtitle = element_text(size = 7.2, colour = "grey30"),
+        plot.title = ggtext::element_markdown(size = 9, hjust = 0),
         legend.key.height = unit(0.75, "cm"),
         legend.title = element_text(size = 7), legend.text = element_text(size = 6.5))
 
-panel <- function(dat, yvar, ttl, sub, ylab) {
+panel <- function(dat, yvar, ttl, ylab) {
   dat$row <- yvar
   ggplot(dat, aes(wf, row)) +
     geom_tile(aes(fill = log10(err)), colour = "grey70", linewidth = 0.3) +
@@ -132,34 +135,27 @@ panel <- function(dat, yvar, ttl, sub, ylab) {
     scale_colour_manual(values = c(`TRUE` = "white", `FALSE` = ink), guide = "none") +
     scale_fill_gradient(low = "white", high = "grey20",
                         name = "log10\n% error", limits = LIM) +
-    labs(title = ttl, subtitle = sub, x = "target weight (w)", y = ylab) + base
+    labs(title = ttl, x = "target weight (*w*)", y = ylab) + base +
+    theme(axis.title.x = ggtext::element_markdown(size = 8),
+          axis.title.y = if (is.character(ylab)) ggtext::element_markdown(size = 8)
+                         else element_text(size = 8))
 }
 
 A <- s %>% filter(SR == 1, MM == 1) %>% mutate(rule = w == 50 * (Np / 100))
 A$rowf <- factor(A$Np, levels = c(1600, 400, 100))
 pa <- panel(A, A$rowf,
-  "a) Boundary family (SR = 1, MM = 1): weight x population size",
-  "Heavy outline = the linear rule w = 50 (N_P/100) used in the validation grid.\nRed x = R-hat > 1.05 or one or more chains frozen at a single state.",
+  "**(a)** Boundary family (*SR* = 1, *MM* = 1)",
   expression(N[P]))
 
 B <- s %>% filter(Np == 400) %>% mutate(rule = w == 200)
 B$rowf <- factor(paste0(B$SR, ":", B$MM),
                  levels = rev(c("1:1", "1:2", "1:4", "2:2", "2:4", "4:4")))
 pb <- panel(B, B$rowf,
-  "b) All feasible mating systems at N_P = 400",
-  "Heavy outline = the linear rule, which sets w = 200 at this population size.\nOptimum shifts left as mean mates increases.",
-  "SR : MM")
+  "**(b)** Mating systems at *N*<sub>P</sub> = 400",
+  "*SR* : *MM*")
 
-p <- pa / pb + plot_layout(heights = c(1, 1.55), guides = "collect") +
-  plot_annotation(
-    title = "Figure S2. Sensitivity of mean-mates fidelity to the target weight.",
-    subtitle = paste(
-      "Cell values are percent error in realized mean mates against target, from 4 chains x 10^6 iterations",
-      "\n(cap 10, gamma = -0.05). Error is U-shaped in w: loose weights leave demographic bias, tight weights",
-      "\nfreeze the sampler. The optimum increases with N_P and decreases with mean mates."),
-    theme = theme(plot.title = element_text(size = 10, face = "bold"),
-                  plot.subtitle = element_text(size = 7.2)))
+p <- pa / pb + plot_layout(heights = c(1, 1.55), guides = "collect")
 
 out <- "figures/Figure_S02_Weight_Sensitivity.png"
-ggsave(out, p, width = 8.2, height = 6.4, dpi = 300, bg = "white")
+ggsave(out, p, width = 8.0, height = 5.6, dpi = 300, bg = "white")
 cat("[SUCCESS] ->", out, "\n         ->", cache, "\n")
