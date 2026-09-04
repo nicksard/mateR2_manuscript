@@ -43,24 +43,56 @@ if (inherits(st, "try-error")) {
   if (!inherits(sha, "try-error")) cat("       HEAD:", sha, "\n")
 }
 
-# --- 2. Newest source vs outputs ---------------------------------------------
-hdr("2. Outputs vs source code")
-src <- list.files("scripts", "\\.R$", full.names = TRUE)
-src_t <- max(file.mtime(src))
-cat(sprintf("  newest source file: %s (%s)\n",
-            basename(src[which.max(file.mtime(src))]), format(src_t, "%Y-%m-%d %H:%M")))
+# --- 2. Outputs vs the script that produces them ------------------------------
+# Comparing every output against the NEWEST script is too blunt: editing one
+# plotting script would mark every chain file stale even though nothing that
+# produces chains changed. Each output is checked against its own producer, and
+# against the upstream scripts it genuinely depends on.
+hdr("2. Outputs vs the code that produces them")
+
+produced_by <- list(
+  # output pattern                     = scripts it depends on (in order)
+  "data/outputs/chains/"               = c("01_setup_scenarios.R", "02_run_mcmc_chains.R"),
+  "data/outputs/mcmc_convergence"      = c("01_setup_scenarios.R", "02_run_mcmc_chains.R",
+                                           "03_convergence_stats.R"),
+  "figures/Figure_03"                  = c("03_convergence_stats.R", "04_generate_mateR2_figures.R"),
+  "figures/Figure_S01"                 = c("03_convergence_stats.R", "04_generate_mateR2_figures.R"),
+  "figures/Figure_04"                  = c("05_topology_validation.R"),
+  "figures/topology_grid_summary"      = c("05_topology_validation.R"),
+  "figures/Figure_05"                  = c("06_sibling_dynamics.R"),
+  "figures/Figure_06"                  = c("06_sibling_dynamics.R"),
+  "data/outputs/extended_sib"          = c("06_sibling_dynamics.R"),
+  "figures/Figure_01"                  = c("07_figure_1_Bipartite_Network_visuals.R"),
+  "figures/Figure_02"                  = c("08_figure_2_worked_Example.R"),
+  "data/outputs/sibling_asymmetry"     = c("09_sibling_asymmetry_mechanism.R"),
+  "figures/Figure_S02"                 = c("10_weight_sensitivity.R")
+)
 
 outs <- c(list.files("data/outputs", full.names = TRUE, recursive = TRUE),
           list.files("figures", full.names = TRUE))
-outs <- outs[!grepl("weight_sensitivity", outs)]   # step 10 is opt-in and cached
+# step 10's sweep is cached by design and opt-in; not part of the default run
+outs <- outs[!grepl("weight_sensitivity.csv", outs)]
+
 if (!length(outs)) {
   note(FALSE, "no outputs found -- run scripts/00_run_all.R")
 } else {
-  stale <- outs[file.mtime(outs) < src_t]
+  stale <- character(); orphan <- character()
+  for (f in outs) {
+    hit <- names(produced_by)[vapply(names(produced_by),
+                                     function(k) grepl(k, f, fixed = TRUE), logical(1))]
+    if (!length(hit)) { orphan <- c(orphan, f); next }
+    deps <- file.path("scripts", produced_by[[hit[1]]])
+    deps <- deps[file.exists(deps)]
+    if (length(deps) && file.mtime(f) < max(file.mtime(deps))) stale <- c(stale, f)
+  }
   note(length(stale) == 0,
-       sprintf("all %d outputs postdate the newest source file (%d stale)",
+       sprintf("all %d outputs postdate their own producing script(s) (%d stale)",
                length(outs), length(stale)))
   if (length(stale)) cat(paste0("       ", head(stale, 12), collapse = "\n"), "\n")
+  # An output with no producing script cannot be regenerated and should not ship.
+  note(length(orphan) == 0,
+       sprintf("every output has a producing script (%d orphaned)", length(orphan)))
+  if (length(orphan)) cat(paste0("       ", head(orphan, 12), collapse = "\n"), "\n")
 }
 
 # --- 3 & 4. Package build and recorded version --------------------------------
