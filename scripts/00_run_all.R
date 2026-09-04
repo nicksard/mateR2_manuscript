@@ -39,10 +39,23 @@ steps <- list(
   list(id = "08", file = "08_figure_2_worked_Example.R",
        what = "Figure 2 (worked example)"),
   list(id = "09", file = "09_sibling_asymmetry_mechanism.R",
-       what = "Sibling asymmetry mechanism (Sections 5.2 / 5.3)")
+       what = "Sibling asymmetry mechanism (Sections 5.2 / 5.3)"),
+  list(id = "10", file = "10_weight_sensitivity.R",
+       what = "Figure S2, weight sensitivity (SLOW; not run by default)")
 )
 
-args <- commandArgs(trailingOnly = TRUE)
+# Step 10 runs its own MCMC over weights the validation grid does not use and
+# takes 25-40 minutes the first time. It caches to
+# data/outputs/weight_sensitivity.csv, so later runs only redraw the figure in
+# seconds. Excluded from the default run; name it explicitly to include it.
+optional <- c("10")
+
+args    <- commandArgs(trailingOnly = TRUE)
+skipped <- list()
+if (!length(args)) {
+  skipped <- Filter(function(s) s$id %in% optional, steps)
+  steps   <- Filter(function(s) !(s$id %in% optional), steps)
+}
 if (length(args)) {
   keep <- vapply(steps, function(s) s$id %in% args, logical(1))
   if (!any(keep)) {
@@ -72,6 +85,14 @@ cat("  R         ", as.character(getRversion()), "\n")
 cat("  mateR2    ", as.character(utils::packageVersion("mateR2")), "\n")
 cat("  workers   ", Sys.getenv("MATER2_WORKERS", unset = "4"), "\n")
 cat("  steps     ", paste(vapply(steps, `[[`, "", "id"), collapse = " "), "\n")
+if (length(skipped)) {
+  cached <- file.exists("data/outputs/weight_sensitivity.csv")
+  cat("  skipped   ", paste(vapply(skipped, `[[`, "", "id"), collapse = " "),
+      sprintf(" (opt-in; %s) -- run: Rscript scripts/00_run_all.R %s\n",
+              ifelse(cached, "cached, would take seconds",
+                     "no cache, would take 25-40 min"),
+              paste(vapply(skipped, `[[`, "", "id"), collapse = " ")))
+}
 cat(strrep("=", 78), "\n\n")
 
 # --- Run ----------------------------------------------------------------------
@@ -81,14 +102,14 @@ timings <- data.frame()
 for (s in steps) {
   path <- file.path("scripts", s$file)
   if (!file.exists(path)) stop("Missing script: ", path)
-
+  
   cat(sprintf("\n[%s] %s\n     %s\n", s$id, s$file, s$what))
   cat(strrep("-", 78), "\n")
-
+  
   t0 <- Sys.time()
   status <- system2("Rscript", path)
   dt <- as.numeric(difftime(Sys.time(), t0, units = "mins"))
-
+  
   if (!identical(status, 0L)) {
     cat(sprintf("\n[FAIL] %s exited with status %d after %.1f min.\n",
                 s$file, status, dt))
