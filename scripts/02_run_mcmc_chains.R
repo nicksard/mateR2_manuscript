@@ -34,7 +34,7 @@ library(mateR2)
 
 if (utils::packageVersion("mateR2") < "0.1.0") {
   stop("mateR2 >= 0.1.0 required (the C++ sampler must draw from R's RNG). ",
-       "Install with devtools::install_github('nicksard/mateR2').")
+       "Install with pak::pak('nicksard/mateR2').")
 }
 
 # --- Parallel workers ---------------------------------------------------------

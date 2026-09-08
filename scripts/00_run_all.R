@@ -69,7 +69,7 @@ if (length(args)) {
 if (getRversion() < "4.1") stop("R >= 4.1 required; found ", getRversion())
 if (!requireNamespace("mateR2", quietly = TRUE)) {
   stop("mateR2 is not installed. ",
-       "devtools::install_github('nicksard/mateR2')")
+       "pak::pak('nicksard/mateR2')")
 }
 if (utils::packageVersion("mateR2") < "0.1.0") {
   stop("mateR2 >= 0.1.0 required (the C++ sampler must draw from R's RNG); ",
