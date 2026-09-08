@@ -101,14 +101,36 @@ if (file.exists(cache)) {
 }
 
 # --- Figure -------------------------------------------------------------------
-s$err <- pmax(s$error_pct, 0.005)
 s$wf  <- factor(s$w, levels = weights)
+
+# Fill on R-hat, annotate with per-cent error. R-hat degrades well before error
+# rises -- in the main grid, 8 of 30 cells exceed 1.05 while the median error is
+# 0.18% -- so a figure keyed on error understates how far a weight can be from
+# usable. Filling on convergence and printing error puts both in one cell: a
+# dark tile carrying a small number is precisely the failure mode being warned
+# about.
 s$lab <- ifelse(s$error_pct < 0.01, "<0.01", sprintf("%.2f", s$error_pct))
-# Flag any cell that failed convergence OR froze. Reported, never dropped: a
-# frozen chain still yields a point estimate, but its uncertainty is undefined.
+
+# Binned rather than continuous: the interesting structure sits at the
+# conventional 1.05 and 1.10 thresholds, which a smooth gradient buries. Frozen
+# chains give an infinite R-hat and get their own class -- excluding them would
+# hide the exact regime tight weights produce.
+s$rhat_class <- cut(
+  ifelse(s$n_frozen_chains > 0, Inf, s$rhat_max),
+  breaks = c(-Inf, 1.01, 1.05, 1.10, Inf),
+  labels = c("<= 1.01", "<= 1.05", "<= 1.10", "> 1.10 / frozen"),
+  right  = TRUE
+)
+
+# Still marked individually, since "frozen" and "merely unconverged" differ:
+# a frozen chain returns a point estimate whose uncertainty is undefined.
 s$bad <- (is.infinite(s$rhat_max) | s$rhat_max > 1.05) | (s$n_frozen_chains > 0)
-LIM <- range(log10(s$err))
 ink <- "grey15"
+
+RHAT_FILL <- c("<= 1.01"          = "white",
+               "<= 1.05"          = "grey85",
+               "<= 1.10"          = "grey55",
+               "> 1.10 / frozen"  = "grey20")
 
 # The figure carries only the panels. Everything explanatory -- what the cells
 # are, what the outline and the red x mean, how the sweep was run -- belongs in
@@ -122,19 +144,20 @@ base <- theme_bw(base_size = 8) +
 panel <- function(dat, yvar, ttl, ylab) {
   dat$row <- yvar
   ggplot(dat, aes(wf, row)) +
-    geom_tile(aes(fill = log10(err)), colour = "grey70", linewidth = 0.3) +
+    geom_tile(aes(fill = rhat_class), colour = "grey70", linewidth = 0.3) +
     geom_rect(data = subset(dat, rule),
               aes(xmin = as.numeric(wf) - 0.46, xmax = as.numeric(wf) + 0.46,
                   ymin = as.numeric(row) - 0.46, ymax = as.numeric(row) + 0.46),
               fill = NA, colour = "black", linewidth = 0.9, inherit.aes = FALSE) +
-    geom_text(aes(label = lab, colour = log10(err) > 0.7), size = 2.6, fontface = "bold") +
+    geom_text(aes(label = lab, colour = rhat_class == "> 1.10 / frozen"),
+              size = 2.6, fontface = "bold") +
     geom_point(data = subset(dat, bad),
                aes(x = as.numeric(wf) + 0.30, y = as.numeric(row) + 0.29),
                shape = 4, size = 1.5, stroke = 0.75, colour = "firebrick",
                inherit.aes = FALSE) +
     scale_colour_manual(values = c(`TRUE` = "white", `FALSE` = ink), guide = "none") +
-    scale_fill_gradient(low = "white", high = "grey20",
-                        name = "log10\n% error", limits = LIM) +
+    scale_fill_manual(values = RHAT_FILL, drop = FALSE,
+                      name = expression(hat(R))) +
     labs(title = ttl, x = "target weight (*w*)", y = ylab) + base +
     theme(axis.title.x = ggtext::element_markdown(size = 8),
           axis.title.y = if (is.character(ylab)) ggtext::element_markdown(size = 8)
