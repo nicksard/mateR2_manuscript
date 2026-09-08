@@ -190,7 +190,7 @@ p_components <- ggplot(summary_topology_df, aes(x = Intensity, y = Mean_Componen
   scale_color_brewer(palette = "Set1") +
   scale_x_continuous(breaks = seq(0, 1, by = 0.1)) +
   labs(
-    title = "A) Connected Components Count (Macro-Topology)",
+    title = "a) Connected Components Count (Macro-Topology)",
     x     = NULL,
     y     = "Mean Component Count",
     color = expression("Parent Pool (" * N[P] * ")")
@@ -210,7 +210,7 @@ p_density <- ggplot(summary_topology_df, aes(x = Intensity, y = Mean_Density, co
   scale_color_brewer(palette = "Set1") +
   scale_x_continuous(breaks = seq(0, 1, by = 0.1)) +
   labs(
-    title = "B) Co-Mating Pair Density (Micro-Topology)",
+    title = "b) Co-Mating Pair Density (Micro-Topology)",
     x     = "Mixing Intensity (I)",
     y     = "Mean One-Mode Projection Density",
     color = expression("Parent Pool (" * N[P] * ")")
