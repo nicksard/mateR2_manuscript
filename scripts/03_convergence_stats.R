@@ -84,22 +84,27 @@ write_csv(per_seed, "data/outputs/mcmc_convergence_by_seed.csv")
 worst_obs <- function(obs, err) obs[which.max(err)]
 med_obs   <- function(obs, err) obs[order(err)[ceiling(length(err) / 2)]]
 
+# NB: every output column below is suffixed, and the _med suffix is stripped
+# afterwards. summarise() evaluates sequentially and a later expression sees
+# columns created by an earlier one, so naming any output after an input column
+# silently collapses every subsequent reference to it. The same trap is
+# documented in script 09. Do not "simplify" this by writing the medians
+# directly into the bare names.
 summary_tbl <- per_seed %>%
   group_by(scenario_id, profile_name, target_Np, target_SR, target_MM) %>%
   summarise(
-    # --- median: what Section 4.1 reports -------------------------------------
-    obs_Np       = med_obs(obs_Np, error_Np_pct),
-    obs_SR       = med_obs(obs_SR, error_SR_pct),
-    obs_MM       = med_obs(obs_MM, error_MM_pct),
-    error_Np_pct = median(error_Np_pct),
-    error_SR_pct = median(error_SR_pct),
-    error_MM_pct = median(error_MM_pct),
-    chains_used  = sum(chains_used),          # total chains behind the cell
-    rhat_Np = median(rhat_Np), ess_Np = median(ess_Np),
-    rhat_SR = median(rhat_SR), ess_SR = median(ess_SR),
-    rhat_MM = median(rhat_MM), ess_MM = median(ess_MM),
+    # --- median across seed sets: what Section 4.1 reports ---------------------
+    obs_Np_med       = med_obs(obs_Np, error_Np_pct),
+    obs_SR_med       = med_obs(obs_SR, error_SR_pct),
+    obs_MM_med       = med_obs(obs_MM, error_MM_pct),
+    error_Np_pct_med = median(error_Np_pct),
+    error_SR_pct_med = median(error_SR_pct),
+    error_MM_pct_med = median(error_MM_pct),
+    rhat_Np_med = median(rhat_Np), ess_Np_med = median(ess_Np),
+    rhat_SR_med = median(rhat_SR), ess_SR_med = median(ess_SR),
+    rhat_MM_med = median(rhat_MM), ess_MM_med = median(ess_MM),
 
-    # --- envelope: the bound quoted in the caption ----------------------------
+    # --- envelope across seed sets: the bound quoted in the caption ------------
     obs_Np_env       = worst_obs(obs_Np, error_Np_pct),
     obs_SR_env       = worst_obs(obs_SR, error_SR_pct),
     obs_MM_env       = worst_obs(obs_MM, error_MM_pct),
@@ -110,10 +115,27 @@ summary_tbl <- per_seed %>%
     rhat_SR_env = max(rhat_SR), ess_SR_env = min(ess_SR),
     rhat_MM_env = max(rhat_MM), ess_MM_env = min(ess_MM),
 
-    n_seed_sets  = n(),
+    chains_used_med = sum(chains_used),      # total chains behind the cell
+    n_seed_sets     = n(),
     .groups = "drop"
   ) %>%
   arrange(scenario_id)
+
+# Strip the _med suffix so the bare names carry the median, which is what the
+# paper reports and what script 04 plots. _env names are left alone.
+names(summary_tbl) <- sub("_med$", "", names(summary_tbl))
+
+# Guard against the shadowing bug ever returning: the envelope must bound the
+# median, and for a metric with any spread across seed sets it must exceed it
+# somewhere. If these are equal everywhere, the two families have collapsed.
+stopifnot(all(summary_tbl$error_MM_pct_env >= summary_tbl$error_MM_pct),
+          all(summary_tbl$rhat_MM_env      >= summary_tbl$rhat_MM),
+          all(summary_tbl$ess_MM_env       <= summary_tbl$ess_MM))
+if (max(summary_tbl$n_seed_sets) > 1 &&
+    isTRUE(all.equal(summary_tbl$error_MM_pct_env, summary_tbl$error_MM_pct))) {
+  stop("Envelope and median columns are identical across all 30 scenarios. ",
+       "This is the summarise() shadowing bug, not a property of the data.")
+}
 
 # The original 18 columns first, in the original order, so script 04 is
 # untouched -- it now plots medians because the bare names hold them.
