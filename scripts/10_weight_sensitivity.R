@@ -17,7 +17,7 @@
 #
 # WARNING: this is the slow step. It runs its own MCMC rather than reusing
 # script 02's grid, because it needs weights the validation grid does not use.
-# 108 jobs x 4 chains x 1e6 iterations -- roughly 25-40 minutes on 4 workers.
+# 162 jobs x 4 chains x 1e6 iterations -- roughly 40-60 minutes on 4 workers.
 # It is NOT part of the default pipeline; run it explicitly:
 #     Rscript scripts/00_run_all.R 10
 # Results are cached to data/outputs/weight_sensitivity.csv and reused if
@@ -38,7 +38,7 @@ if (!dir.exists("figures"))      dir.create("figures", recursive = TRUE)
 cache <- "data/outputs/weight_sensitivity.csv"
 
 weights   <- c(50, 100, 200, 400, 800, 1000)
-seed_sets <- c(100, 200)
+seed_sets <- c(100, 200, 300)   # match the main grid; 162 jobs, ~40-60 min
 cap <- 10; gam <- -0.05
 n_iter <- 1e6; burn_in <- 1e5
 

@@ -231,4 +231,4 @@ print(combined_macro_micro_plot)
 # Export assets
 dir.create("figures", showWarnings = FALSE)
 ggsave("figures/Figure_04_Macro_Micro_Plot.png", combined_macro_micro_plot, width = 11, height = 8.5, dpi = 300)
-write_csv(summary_topology_df, "figures/topology_grid_summary.csv")
+write_csv(summary_topology_df, "data/outputs/topology_grid_summary.csv")

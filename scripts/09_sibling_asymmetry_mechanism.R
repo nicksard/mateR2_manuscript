@@ -198,6 +198,25 @@ summ <- raw %>%
 
 write_csv(summ, "data/outputs/sibling_asymmetry_cells.csv")
 
+# --- Table 1, exactly as the manuscript prints it -----------------------------
+# Written from the same object the analysis produces, so the manuscript table
+# and the pipeline output cannot drift apart. Five columns, N_P = 400,
+# N_sample = 1000, rounded here rather than in the document.
+table_01 <- summ %>%
+  filter(Np == 400) %>%
+  transmute(
+    SR,
+    MM,
+    mean_maternal_HS = round(mean_MHS, 2),
+    mean_paternal_HS = round(mean_PHS, 2),
+    ratio            = round(ratio_excl, 3)
+  ) %>%
+  arrange(SR, MM)
+
+write_csv(table_01, "data/outputs/table_01_sibling_asymmetry.csv")
+cat("\n=== Table 1 (N_P = 400, N_sample =", n_sample, ") ===\n")
+print(as.data.frame(table_01), row.names = FALSE)
+
 cat("\n=== Per-cell summary (N_sample =", n_sample, ", equal n per cell) ===\n")
 print(as.data.frame(summ %>% select(Np, SR, MM, CV_f, CV_m, mean_MHS, mean_PHS,
                                     ratio_excl, ratio_incl, predicted,

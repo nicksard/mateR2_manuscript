@@ -58,13 +58,16 @@ produced_by <- list(
   "figures/Figure_03"                  = c("03_convergence_stats.R", "04_generate_mateR2_figures.R"),
   "figures/Figure_S01"                 = c("03_convergence_stats.R", "04_generate_mateR2_figures.R"),
   "figures/Figure_04"                  = c("05_topology_validation.R"),
-  "figures/topology_grid_summary"      = c("05_topology_validation.R"),
+  "data/outputs/topology_grid_summary" = c("05_topology_validation.R"),
   "figures/Figure_05"                  = c("06_sibling_dynamics.R"),
+  "data/outputs/sibling_group_sizes"   = c("06_sibling_dynamics.R"),
+  "data/outputs/parent_yield_summary"  = c("06_sibling_dynamics.R"),
   "figures/Figure_06"                  = c("06_sibling_dynamics.R"),
   "data/outputs/extended_sib"          = c("06_sibling_dynamics.R"),
   "figures/Figure_01"                  = c("07_figure_1_Bipartite_Network_visuals.R"),
   "figures/Figure_02"                  = c("08_figure_2_worked_Example.R"),
   "data/outputs/sibling_asymmetry"     = c("09_sibling_asymmetry_mechanism.R"),
+  "data/outputs/table_01"              = c("09_sibling_asymmetry_mechanism.R"),
   "figures/Figure_S02"                 = c("10_weight_sensitivity.R")
 )
 

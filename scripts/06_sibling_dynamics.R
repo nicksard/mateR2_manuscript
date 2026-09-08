@@ -199,7 +199,7 @@ df_sib_summary <- df_raw %>%
 df_sib_summary %>% as.data.frame()
 
 # Write to file
-write_csv(df_sib_summary, "figures/Figure_05_Sibling_Group_Sizes_Summary.csv")
+write_csv(df_sib_summary, "data/outputs/sibling_group_sizes_summary.csv")
 
 
 # Plot: facet_grid(Sib_Label ~ .) places stripSib_Label# Plot: facet_grid(Sib_Label ~ .) places strips vertically on the RIGHT side
@@ -296,5 +296,5 @@ print(p_yield_grid)
 ggsave("figures/Figure_06_Parent_Yield_Classes.png", plot = p_yield_grid, width = 9.0, height = 7.0, dpi = 300)
 
 # Write to file
-write_csv(df_yield_grid, "figures/Figure_06_Parent_Yield_Grid_Summary.csv")
+write_csv(df_yield_grid, "data/outputs/parent_yield_summary.csv")
 df_yield_grid %>% as.data.frame()

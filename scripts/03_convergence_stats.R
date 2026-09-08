@@ -9,7 +9,8 @@
 #
 # Outputs:
 #   data/outputs/mcmc_convergence_by_seed.csv  -- one row per scenario x seed set
-#   data/outputs/mcmc_convergence_summary.csv  -- one row per scenario, WORST CASE
+#   data/outputs/mcmc_convergence_summary.csv  -- one row per scenario, MEDIAN
+#                                                 across seed sets, plus _env envelope
 #                                                 across seed sets. Original
 #                                                 18-column schema, so script 04
 #                                                 runs unchanged.
@@ -66,44 +67,82 @@ per_seed <- bind_rows(lapply(files, function(f) {
 
 write_csv(per_seed, "data/outputs/mcmc_convergence_by_seed.csv")
 
-# --- Envelope: one row per scenario, worst case across seed sets ---------------
-# obs_* is taken from the seed set that produced the worst error for that
-# parameter, so each observed value stays paired with its own error.
+# --- One row per scenario: median across seed sets, with the envelope kept -----
+# The manuscript reports the MEDIAN across seed sets and states the envelope as
+# a bound. A worst-case envelope cannot distinguish a cell that fails to
+# converge from one that drew badly once: for MM, R-hat > 1.05 is 8 of 30 by
+# envelope but 4 by median, and N_P=1600/SR=2/MM=2 gives 1.363, 1.003, 1.036.
+#
+# Bare column names carry the MEDIAN, because those are the values the paper
+# reports and the values script 04 plots. The envelope is retained under an
+# _env suffix so both live in one object and nothing is transcribed by hand.
+#
+# obs_* is taken from the seed set that produced the median (or worst) error for
+# that parameter, never a median of the observations themselves: error_* is
+# computed from obs_*, so averaging them independently would describe a cell
+# that no seed set actually produced.
 worst_obs <- function(obs, err) obs[which.max(err)]
+med_obs   <- function(obs, err) obs[order(err)[ceiling(length(err) / 2)]]
 
-envelope <- per_seed %>%
+summary_tbl <- per_seed %>%
   group_by(scenario_id, profile_name, target_Np, target_SR, target_MM) %>%
   summarise(
-    obs_Np       = worst_obs(obs_Np, error_Np_pct),
-    obs_SR       = worst_obs(obs_SR, error_SR_pct),
-    obs_MM       = worst_obs(obs_MM, error_MM_pct),
-    error_Np_pct = max(error_Np_pct),
-    error_SR_pct = max(error_SR_pct),
-    error_MM_pct = max(error_MM_pct),
+    # --- median: what Section 4.1 reports -------------------------------------
+    obs_Np       = med_obs(obs_Np, error_Np_pct),
+    obs_SR       = med_obs(obs_SR, error_SR_pct),
+    obs_MM       = med_obs(obs_MM, error_MM_pct),
+    error_Np_pct = median(error_Np_pct),
+    error_SR_pct = median(error_SR_pct),
+    error_MM_pct = median(error_MM_pct),
     chains_used  = sum(chains_used),          # total chains behind the cell
-    rhat_Np = max(rhat_Np), ess_Np = min(ess_Np),
-    rhat_SR = max(rhat_SR), ess_SR = min(ess_SR),
-    rhat_MM = max(rhat_MM), ess_MM = min(ess_MM),
+    rhat_Np = median(rhat_Np), ess_Np = median(ess_Np),
+    rhat_SR = median(rhat_SR), ess_SR = median(ess_SR),
+    rhat_MM = median(rhat_MM), ess_MM = median(ess_MM),
+
+    # --- envelope: the bound quoted in the caption ----------------------------
+    obs_Np_env       = worst_obs(obs_Np, error_Np_pct),
+    obs_SR_env       = worst_obs(obs_SR, error_SR_pct),
+    obs_MM_env       = worst_obs(obs_MM, error_MM_pct),
+    error_Np_pct_env = max(error_Np_pct),
+    error_SR_pct_env = max(error_SR_pct),
+    error_MM_pct_env = max(error_MM_pct),
+    rhat_Np_env = max(rhat_Np), ess_Np_env = min(ess_Np),
+    rhat_SR_env = max(rhat_SR), ess_SR_env = min(ess_SR),
+    rhat_MM_env = max(rhat_MM), ess_MM_env = min(ess_MM),
+
     n_seed_sets  = n(),
     .groups = "drop"
   ) %>%
   arrange(scenario_id)
 
-# Original 18-column schema, in the original order, so script 04 is untouched.
+# The original 18 columns first, in the original order, so script 04 is
+# untouched -- it now plots medians because the bare names hold them.
 schema <- c("scenario_id","profile_name","target_Np","target_SR","target_MM",
             "obs_Np","obs_SR","obs_MM","error_Np_pct","error_SR_pct",
             "error_MM_pct","chains_used","rhat_Np","ess_Np","rhat_SR","ess_SR",
             "rhat_MM","ess_MM")
-write_csv(envelope[, schema], "data/outputs/mcmc_convergence_summary.csv")
+env_cols <- c("obs_Np_env","obs_SR_env","obs_MM_env",
+              "error_Np_pct_env","error_SR_pct_env","error_MM_pct_env",
+              "rhat_Np_env","ess_Np_env","rhat_SR_env","ess_SR_env",
+              "rhat_MM_env","ess_MM_env","n_seed_sets")
+write_csv(summary_tbl[, c(schema, env_cols)],
+          "data/outputs/mcmc_convergence_summary.csv")
+
+envelope <- summary_tbl        # name kept for the report block below
 
 # --- Report -------------------------------------------------------------------
 cat(sprintf("\n[Complete] %d scenarios x %d seed sets.\n",
             nrow(envelope), max(envelope$n_seed_sets)))
 for (p in c("Np","SR","MM")) {
-  e <- envelope[[paste0("error_", p, "_pct")]]
-  r <- envelope[[paste0("rhat_", p)]]
-  s <- envelope[[paste0("ess_",  p)]]
-  cat(sprintf("  %-3s  median err %6.3f%%  max %7.3f%%  |  rhat>1.05: %2d/%d  |  ESS<400: %2d/%d  min ESS %8.0f\n",
-              p, median(e), max(e), sum(r > 1.05), nrow(envelope),
-              sum(s < 400), nrow(envelope), min(s)))
+  e  <- envelope[[paste0("error_", p, "_pct")]]
+  r  <- envelope[[paste0("rhat_",  p)]]
+  s_ <- envelope[[paste0("ess_",   p)]]
+  re <- envelope[[paste0("rhat_",  p, "_env")]]
+  se <- envelope[[paste0("ess_",   p, "_env")]]
+  ee <- envelope[[paste0("error_", p, "_pct_env")]]
+  cat(sprintf(
+    "  %-3s  median err %6.3f%%  (envelope max %7.3f%%)  |  rhat>1.05: %2d/%d median, %2d/%d envelope  |  ESS<400: %2d/%d median, %2d/%d envelope  |  min ESS %8.0f\n",
+    p, median(e), max(ee),
+    sum(r > 1.05), nrow(envelope), sum(re > 1.05), nrow(envelope),
+    sum(s_ < 400), nrow(envelope), sum(se < 400), nrow(envelope), min(se)))
 }
