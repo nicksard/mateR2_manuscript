@@ -35,10 +35,19 @@ library(parallel)
 if (!dir.exists("data/outputs")) dir.create("data/outputs", recursive = TRUE)
 if (!dir.exists("figures"))      dir.create("figures", recursive = TRUE)
 
-cache <- "data/outputs/weight_sensitivity.csv"
+cache   <- "data/outputs/weight_sensitivity.csv"
+# One file per job, so the sweep is restartable and adding weights does not
+# recompute the combinations already run. Same idiom as script 02.
+job_dir <- "data/outputs/weight_jobs"
 
 weights   <- c(50, 100, 200, 400, 800, 1000)
-seed_sets <- c(100, 200, 300)   # match the main grid; 162 jobs, ~40-60 min
+# At N_P = 1600 the error is still falling monotonically at w = 1000, so the
+# original grid never brackets the optimum there. Section 5.1 argues the optimum
+# tracks N_P, which cannot be shown from a sweep that stops well below it.
+# These run only at N_P = 1600: at smaller N_P they are far past 2*N_P and would
+# do nothing but freeze chains.
+weights_hi <- c(1600, 2400, 3200)
+seed_sets  <- c(100, 200, 300)   # match the main grid
 cap <- 10; gam <- -0.05
 n_iter <- 1e6; burn_in <- 1e5
 
@@ -51,57 +60,73 @@ cells <- bind_rows(
 ) %>% distinct(Np, SR, MM)
 
 # --- Sweep --------------------------------------------------------------------
-if (file.exists(cache)) {
-  cat("Using cached sweep at ", cache, " (delete it to re-run).\n", sep = "")
-  s <- read_csv(cache, show_col_types = FALSE)
-} else {
-  jobs <- merge(merge(cells, data.frame(w = weights)), data.frame(seed = seed_sets))
-  cat(sprintf("Running %d jobs (this is the slow step)...\n", nrow(jobs)))
+if (!dir.exists(job_dir)) dir.create(job_dir, recursive = TRUE)
 
-  run_job <- function(i) {
-    j <- jobs[i, ]
-    r <- try(mateR2::run_mcmc_chains(
-      Np_target = j$Np, sr_target = j$SR, mean_mates_target = j$MM,
-      max_males_per_female = cap, max_females_per_male = cap,
-      n_chains = 4, seed = j$seed, n_iter = n_iter, burn_in = burn_in,
-      thin = 100, trace_thin = 10, decay_constant = gam,
-      np_weight = j$w, sr_weight = j$w, mm_weight = j$w,
-      show_progress = FALSE), silent = TRUE)
-    if (inherits(r, "try-error")) return(NULL)
-    d <- r$diagnostics
-    # Freeze detection. ESS alone is misleading here: a chain pinned at one
-    # state can still report a large ESS, and only R-hat exposes it. Count the
-    # distinct values each chain actually visits.
-    for (p in c("Np", "sr", "mean_mates")) {
-      u <- vapply(r$traces[[p]], function(ch) length(unique(as.numeric(ch))), integer(1))
-      d$n_frozen_chains[d$parameter == p] <- sum(u == 1)
-    }
-    d$Np <- j$Np; d$SR <- j$SR; d$MM <- j$MM; d$w <- j$w; d$seed <- j$seed
-    d
+jobs <- bind_rows(
+  merge(merge(cells, data.frame(w = weights)),    data.frame(seed = seed_sets)),
+  merge(merge(subset(cells, Np == 1600), data.frame(w = weights_hi)),
+        data.frame(seed = seed_sets))
+)
+jobs <- jobs[jobs$w <= 2 * jobs$Np, ]          # never run a weight past 2*N_P
+jobs$file <- file.path(job_dir, sprintf("np%d_sr%g_mm%g_w%g_seed%d.rds",
+                                        jobs$Np, jobs$SR, jobs$MM, jobs$w, jobs$seed))
+todo <- which(!file.exists(jobs$file))
+cat(sprintf("%d jobs total, %d already done, %d to run.\n",
+            nrow(jobs), nrow(jobs) - length(todo), length(todo)))
+
+run_job <- function(i) {
+  j <- jobs[i, ]
+  if (file.exists(j$file)) return(invisible(NULL))
+  r <- try(mateR2::run_mcmc_chains(
+    Np_target = j$Np, sr_target = j$SR, mean_mates_target = j$MM,
+    max_males_per_female = cap, max_females_per_male = cap,
+    n_chains = 4, seed = j$seed, n_iter = n_iter, burn_in = burn_in,
+    thin = 100, trace_thin = 10, decay_constant = gam,
+    np_weight = j$w, sr_weight = j$w, mm_weight = j$w,
+    show_progress = FALSE), silent = TRUE)
+  if (inherits(r, "try-error")) return(invisible(NULL))
+  d <- r$diagnostics
+  # Freeze detection. ESS alone is misleading here: a chain pinned at one
+  # state can still report a large ESS, and only R-hat exposes it. Count the
+  # distinct values each chain actually visits.
+  for (p in c("Np", "sr", "mean_mates")) {
+    u <- vapply(r$traces[[p]], function(ch) length(unique(as.numeric(ch))), integer(1))
+    d$n_frozen_chains[d$parameter == p] <- sum(u == 1)
   }
+  d$Np <- j$Np; d$SR <- j$SR; d$MM <- j$MM; d$w <- j$w; d$seed <- j$seed
+  saveRDS(d, j$file)
+  invisible(NULL)
+}
 
+if (length(todo)) {
   n_cores <- as.integer(Sys.getenv("MATER2_WORKERS", unset = "4"))
   if (n_cores > 1) {
     cl <- makeCluster(n_cores); on.exit(stopCluster(cl), add = TRUE)
     clusterEvalQ(cl, library(mateR2))
-    clusterExport(cl, c("jobs", "cap", "gam", "n_iter", "burn_in"), envir = environment())
-    res <- parLapplyLB(cl, seq_len(nrow(jobs)), run_job)
+    clusterExport(cl, c("jobs", "cap", "gam", "n_iter", "burn_in", "job_dir"),
+                  envir = environment())
+    invisible(parLapplyLB(cl, todo, run_job))
   } else {
-    res <- lapply(seq_len(nrow(jobs)), run_job)
+    invisible(lapply(todo, run_job))
   }
-  raw <- bind_rows(Filter(Negate(is.null), res))
-  raw <- raw[raw$parameter == "mean_mates", ]
-
-  s <- raw %>%
-    group_by(Np, SR, MM, w) %>%
-    summarise(error_pct = mean(error_pct), rhat_max = max(rhat),
-              ess_mean = mean(ess), n_frozen_chains = max(n_frozen_chains),
-              n_seed_sets = n(), .groups = "drop")
-  write_csv(s, cache)
 }
 
+# Rebuild from the directory rather than appending, so a re-run cannot leave
+# duplicate rows behind.
+files <- list.files(job_dir, pattern = "\\.rds$", full.names = TRUE)
+if (!length(files)) stop("No job outputs in ", job_dir, ".")
+raw <- bind_rows(lapply(files, readRDS))
+raw <- raw[raw$parameter == "mean_mates", ]
+
+s <- raw %>%
+  group_by(Np, SR, MM, w) %>%
+  summarise(error_pct = mean(error_pct), rhat_max = max(rhat),
+            ess_mean = mean(ess), n_frozen_chains = max(n_frozen_chains),
+            n_seed_sets = n(), .groups = "drop")
+write_csv(s, cache)
+
 # --- Figure -------------------------------------------------------------------
-s$wf  <- factor(s$w, levels = weights)
+s$wf  <- factor(s$w, levels = sort(unique(s$w)))
 
 # Fill on R-hat, annotate with per-cent error. R-hat degrades well before error
 # rises -- in the main grid, 8 of 30 cells exceed 1.05 while the median error is

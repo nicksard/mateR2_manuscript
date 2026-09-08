@@ -38,7 +38,15 @@ np_vals      <- c(100, 200, 400, 800, 1600)
 sr_target    <- 2
 mm_target    <- 2
 sample_sizes <- c(100, 500, 1000)
-n_reps       <- 10
+# 120, matching script 09, and for two reasons. The pooled posterior holds 30
+# draws per scenario (10 per seed set x 3 seed sets), so n_reps = 10 cycled
+# through only draws 1-10 -- which are all from seed set 100, because the pool
+# is concatenated in file order. Figure 5 was therefore built from a single seed
+# set while Section 4.3 reports all three, and the two disagreed on the
+# direction of the half-sibling asymmetry at three of five scales. At 120 every
+# draw is used four times with an independent stochastic realisation, which is
+# exactly the structure behind sibling_asymmetry_cells.csv.
+n_reps       <- 120
 
 mixing_I      <- 0.25          # Section 4.2: topology saturates by I = 0.25
 min_fertility <- 1000; max_fertility <- 5000; fertility_type <- "uniform"
