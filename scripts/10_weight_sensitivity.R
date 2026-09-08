@@ -67,7 +67,6 @@ jobs <- bind_rows(
   merge(merge(subset(cells, Np == 1600), data.frame(w = weights_hi)),
         data.frame(seed = seed_sets))
 )
-jobs <- jobs[jobs$w <= 2 * jobs$Np, ]          # never run a weight past 2*N_P
 jobs$file <- file.path(job_dir, sprintf("np%d_sr%g_mm%g_w%g_seed%d.rds",
                                         jobs$Np, jobs$SR, jobs$MM, jobs$w, jobs$seed))
 todo <- which(!file.exists(jobs$file))
