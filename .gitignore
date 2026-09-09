@@ -5,6 +5,7 @@
 .DS_Store
 .quarto
 data/outputs/chains/
+data/outputs/weight_jobs/
 figures/
 Rplots.pdf
 Rplots.pdf

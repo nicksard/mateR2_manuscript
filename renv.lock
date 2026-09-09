@@ -1226,7 +1226,9 @@
         "RcppProgress"
       ],
       "Imports": [
+        "coda",
         "ggplot2",
+        "igraph",
         "patchwork",
         "Rcpp",
         "RcppProgress",
@@ -1234,13 +1236,11 @@
         "utils"
       ],
       "Suggests": [
-        "coda",
-        "hierfstat",
-        "igraph",
         "knitr",
         "rmarkdown",
         "testthat (>= 3.0.0)"
       ],
+      "SystemRequirements": "C++17",
       "VignetteBuilder": "knitr",
       "URL": "https://github.com/nicksard/mateR2",
       "BugReports": "https://github.com/nicksard/mateR2/issues",
@@ -1253,7 +1253,7 @@
       "RemoteUsername": "nicksard",
       "RemoteRepo": "mateR2",
       "RemoteRef": "v0.1.0",
-      "RemoteSha": "41b4cebc7ea757edf308ef4d520e0557865ace79"
+      "RemoteSha": "02b31771b4b03e537f1f9d258d169908938a6ba2"
     },
     "patchwork": {
       "Package": "patchwork",
