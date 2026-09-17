@@ -1211,8 +1211,8 @@
       "Package": "mateR2",
       "Version": "0.1.0",
       "Source": "GitHub",
-      "Title": "Simulate Single-Cohort Pedigrees Using a Constrained Bipartite Sampler",
-      "Date": "2026-08-28",
+      "Title": "Simulate Demographically Constrained Mating Networks to Benchmark Pedigree Reconstruction",
+      "Date": "2026-09-17",
       "Authors@R": "person(\"Nicholas M.\", \"Sard\", , \"nicksard@gmail.com\", role = c(\"aut\", \"cre\"), comment = c(ORCID = \"0000-0001-7695-2946\"))",
       "Description": "Simulates single-cohort pedigrees for dioecious species by treating the mating pool as a bipartite network. A Metropolis-Hastings Markov chain Monte Carlo sampler, written in C++ via 'Rcpp', navigates a compressed state space of discrete mating-block configurations to satisfy user-specified targets for parental abundance, operational sex ratio and mean number of mates. A joint-degree-preserving edge-swapping routine then rewires the expanded individual-level matrix to dissolve modular block boundaries while holding every individual's mating success constant. Fecundity allocation, offspring sub-sampling, sibship and parental yield-class statistics support benchmarking of pedigree reconstruction software and evaluation of field sampling designs.",
       "License": "MIT + file LICENSE",
@@ -1253,7 +1253,7 @@
       "RemoteUsername": "nicksard",
       "RemoteRepo": "mateR2",
       "RemoteRef": "v0.1.0",
-      "RemoteSha": "02b31771b4b03e537f1f9d258d169908938a6ba2"
+      "RemoteSha": "152c007316b0be295949d72caf3a267d2dc3d5c3"
     },
     "patchwork": {
       "Package": "patchwork",
