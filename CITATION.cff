@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "Analysis code and outputs for the mateR2 manuscript."
+title: "Analysis code for: mateR2: Simulating Demographically Constrained Mating Networks to Benchmark Pedigree Reconstruction"
+version: 1.0.0
+type: software
+license: MIT
+repository-code: "https://github.com/nicksard/mateR2_manuscript"
+authors:
+  - family-names: Sard
+    given-names: Nicholas M.
+    orcid: "https://orcid.org/0000-0001-7695-2946"
+    affiliation: "State University of New York at Oswego"
+references:
+  - type: software
+    title: "mateR2: Simulating Demographically Constrained Mating Networks to Benchmark Pedigree Reconstruction"
+    version: 0.1.0
+    doi: 10.5281/zenodo.22814360
+    authors:
+      - family-names: Sard
+        given-names: Nicholas M.
