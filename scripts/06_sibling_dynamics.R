@@ -1,24 +1,6 @@
 # ==============================================================================
 # Script 06: Sibling Dynamics & Parental Class Distributions
 # Posterior ensemble -> edge-swap rewiring -> fecundity -> sub-sampling
-#
-# CHANGED from the original (see manuscript revision notes):
-#   * Stage 1 is no longer re-run here. The original called generate_map_table()
-#     per replicate with weights 50/25/50, unscaled, and the generate_map_table
-#     default decay_constant of -0.5 rather than -0.05, and with
-#     max_error_pct = Inf which disables the ensemble quality filter entirely.
-#     The result was that Sections 4.3/4.4 were NOT run at SR = 2.0: ensemble
-#     draws sat at a realized SR near 1.4-1.6, and the half-sibling asymmetry
-#     reported in 4.3 is a function of that realized SR, not of the target.
-#     This script now reads the posterior draws produced by script 02, so it
-#     uses the same chains, the same baseline weight profile and the same decay
-#     constant as Sections 3.1/3.2 -- by construction rather than by assertion.
-#   * Adds readr and tibble (write_csv and rownames_to_column were called
-#     without them) and drops the use of `%||%`, which is base R only from 4.4.0.
-#   * Re-seeds between Stage 1 and Stage 2. The C++ sampler now draws from R's
-#     RNG, so downstream sampling would otherwise inherit the chain's RNG path.
-#   * "curveball" naming removed: the routine is a pairwise checkerboard edge
-#     swap (Gotelli & Entsminger 2003; Miklos & Podani 2004), not Curveball.
 # ==============================================================================
 
 library(mateR2)

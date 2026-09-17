@@ -4,13 +4,6 @@
 # Goal: A single vertically stacked composite figure containing:
 #       - (a) Mate-Pair Summary Table (compressed CBS state space, c_b)
 #       - (b) Expanded bipartite mating matrix with demographic proofs
-#
-# CHANGED: rebuilt in ggplot2. The previous version rendered gt tables to PNG
-# with gtsave() and stacked them with magick, which required TWO pieces of
-# system software outside renv's reach: the ImageMagick C++ library, and a
-# headless Chrome install (gt renders HTML and screenshots it). Neither can be
-# restored by renv, so the script died for anyone without both. Figures 3-6 are
-# already plain R; this makes the whole figure pipeline plain R.
 # ==============================================================================
 
 library(dplyr)

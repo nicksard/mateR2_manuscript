@@ -12,11 +12,6 @@ library(mateR2)
 library(patchwork)
 library(ggplot2)
 
-#setting workign directory
-# Run from the repository root (open the .Rproj, or `Rscript scripts/07_...R`).
-# No setwd(): a hard-coded absolute path makes the script unrunnable for anyone
-# who is not the author, which is the first thing a reviewer hits.
-
 # ==========================================
 # 1. CONSTRUCT THE STRUCTURAL PARENT POOL
 # ==========================================

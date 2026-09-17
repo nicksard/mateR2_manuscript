@@ -8,24 +8,6 @@
 #       run mateR2::run_mcmc_chains(), which executes n_chains dispersed chains
 #       and returns coda traces plus per-parameter R-hat / ESS diagnostics.
 #       One .rds per job is written to data/outputs/chains/.
-#
-# CHANGED from the original:
-#   * Removed the source() of scripts/coancestry3.R -- that file is not in the
-#     repository, so the script died on line 14 of a clean clone.
-#   * The unit of work is the SCENARIO, not the chain. run_mcmc_chains() runs
-#     and disperses its own chains, which implements Section 3.1's "dispersed
-#     network states". The previous per-chain runner called
-#     create_initial_counts(), which is deterministic, so all four chains
-#     started from the *identical* state and R-hat was not measuring what
-#     Section 5.1 claims it measures.
-#   * Ten posterior draws are pooled across the n_chains chains and persisted.
-#     Section 3.2 reports 10 draws per scenario; the previous script 05 took 5
-#     draws PER CHAIN (20 per scenario) from a single chain's sample list.
-#     Pooling also mixes better than drawing from one chain.
-#   * Full per-iteration histories are NOT persisted. Four 1e6-row histories per
-#     job is what made data/outputs/chains 720 MB and unarchivable. Only the
-#     thinned diagnostic traces, the MAP table and the diagnostics survive.
-#   * Runs from the repository root. No setwd().
 # ==============================================================================
 
 library(readr)

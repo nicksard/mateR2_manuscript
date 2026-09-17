@@ -13,9 +13,6 @@ library(RColorBrewer)
 library(patchwork)
 
 set.seed(42)
-# Run from the repository root (open the .Rproj, or `Rscript scripts/05_...R`).
-# No setwd(): a hard-coded absolute path makes the script unrunnable for anyone
-# who is not the author.
 
 # ------------------------------------------------------------------------------
 # 1. Helper Function: Calculate Co-Mating Pair Density & Connected Components

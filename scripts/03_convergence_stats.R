@@ -14,19 +14,6 @@
 #                                                 across seed sets. Original
 #                                                 18-column schema, so script 04
 #                                                 runs unchanged.
-#
-# CHANGED from the original:
-#   * R-hat and ESS are no longer computed here. mateR2::run_mcmc_chains()
-#     computes them, so the diagnostic definition now lives in one place, in a
-#     tested package function, rather than being duplicated in a script.
-#   * The original loaded 1e6-row histories from disk and used them UN-thinned,
-#     while Section 3.1 describes a trace recorded every 10th iteration. The
-#     traces are now thinned once, in the package, at `trace_thin`.
-#
-# WORST CASE is a per-metric envelope: max error, max R-hat, min ESS taken
-# independently across seed sets. It is deliberately conservative and is NOT a
-# single realisable run -- R-hat and ESS in one cell may come from different
-# seed sets. Say so in the figure caption.
 # ==============================================================================
 
 library(dplyr)
